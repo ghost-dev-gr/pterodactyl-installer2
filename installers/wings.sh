@@ -27,7 +27,7 @@ set -e
 # https://github.com/pterodactyl-installer/pterodactyl-installer                     #
 #                                                                                    #
 ######################################################################################
-
+mkdir -p /var/www/pterodactyl
 # Check if script is loaded, load if not or fail otherwise.
 fn_exists() { declare -F "$1" >/dev/null; }
 if ! fn_exists lib_loaded; then
