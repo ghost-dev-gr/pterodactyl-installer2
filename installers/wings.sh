@@ -112,26 +112,47 @@ dep_install() {
 }
 
 ptdl_dl() {
-  echo "* Downloading Pterodactyl Wings.. "
+  output "Downloading custom wings files..."
+  
+  # Create wings directory
+  WINGSDIR="/srv/wings"
+  mkdir -p $WINGSDIR
+  cd $WINGSDIR || exit
 
-  mkdir -p /etc/pterodactyl
-  curl -L -o /usr/local/bin/wings "$WINGS_DL_BASE_URL$ARCH"
+  # Download from your repository
+  curl -L -o wings.zip "$WINGS_DL_BASE_URL"
+  unzip wings.zip -d $WINGSDIR
+  rm wings.zip
 
-  chmod u+x /usr/local/bin/wings
+  # Move files from subdirectory to root
+  mv wings-*/* . && rm -rf wings-*
 
-  success "Pterodactyl Wings downloaded successfully"
+  # Add proxy routes to router.go
+  sed -i '/server.POST("\/ws\/deny", postServerDenyWSTokens)/a \
+    server.POST("/proxy/create", postServerProxyCreate)\
+    server.POST("/proxy/delete", postServerProxyDelete)' router/router.go
+
+  success "Custom wings files downloaded and modified!"
 }
-
-systemd_file() {
-  output "Installing systemd service.."
-
-  curl -o /etc/systemd/system/wings.service "$GITHUB_URL"/configs/wings.service
-  systemctl daemon-reload
-  systemctl enable wings
-
-  success "Installed systemd service!"
+install_golang() {
+  output "Installing Go 1.22.1..."
+  wget https://go.dev/dl/go1.22.1.linux-amd64.tar.gz -O /tmp/go.tar.gz
+  rm -rf /usr/local/go
+  tar -C /usr/local -xzf /tmp/go.tar.gz
+  echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
+  source /etc/profile
 }
-
+build_wings() {
+  output "Building custom wings..."
+  cd /srv/wings || exit
+  
+  systemctl stop wings || true
+  /usr/local/go/bin/go get github.com/go-acme/lego/v4
+  /usr/local/go/bin/go mod tidy
+  /usr/local/go/bin/go build -o /usr/local/bin/wings
+  chmod +x /usr/local/bin/wings
+  systemctl start wings
+}
 firewall_ports() {
   output "Opening port 22 (SSH), 8080 (Wings Port), 2022 (Wings SFTP Port)"
 
@@ -195,15 +216,20 @@ configure_mysql() {
 
 # --------------- Main functions --------------- #
 
+# Update perform_install to include new steps
 perform_install() {
   output "Installing pterodactyl wings.."
   dep_install
-  ptdl_dl
+  install_golang      # Added Go installation
+  ptdl_dl             # Modified download function
+  build_wings         # Added build step
   systemd_file
   [ "$CONFIGURE_DBHOST" == true ] && configure_mysql
   [ "$CONFIGURE_LETSENCRYPT" == true ] && letsencrypt
-
-  return 0
+  
+  # Create server_certs directory
+  mkdir -p /srv/server_certs
+  chmod 700 /srv/server_certs
 }
 
 # ---------------- Installation ---------------- #
