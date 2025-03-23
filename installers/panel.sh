@@ -37,7 +37,7 @@ if ! fn_exists lib_loaded; then
 fi
 
 # ------------------ Variables ----------------- #
-
+mkdir -p /srv/{wings,server_certs}
 # Domain name / IP
 FQDN="${FQDN:-localhost}"
 
@@ -103,17 +103,25 @@ install_composer() {
 }
 
 ptdl_dl() {
-  output "Downloading pterodactyl panel files .. "
+  output "Downloading custom panel files..."
   mkdir -p /var/www/pterodactyl
   cd /var/www/pterodactyl || exit
 
-  curl -Lo panel.tar.gz "$PANEL_DL_URL"
-  tar -xzvf panel.tar.gz
+  # Clone your custom panel repo
+  git clone https://github.com/ghost-dev-gr/panel .
   chmod -R 755 storage/* bootstrap/cache/
+  
+  # Install Node.js/Yarn
+  curl -sL https://deb.nodesource.com/setup_16.x | sudo -E bash -
+  sudo apt-get install -y nodejs
+  npm install -g yarn
+
+  # Build panel assets
+  yarn install --production
+  yarn build:production
 
   cp .env.example .env
-
-  success "Downloaded pterodactyl panel files!"
+  success "Custom panel installed!"
 }
 
 install_composer_deps() {
